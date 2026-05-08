@@ -21,28 +21,64 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: false  # handled manually below due to branch pinning
+          submodules: false
+
+      - name: Cache submodules
+        id: cache-submodules
+        uses: actions/cache@v4
+        with:
+          path: |
+            uefi-boot/ext/edk2/src
+            uefi-boot/ext/openssl
+          key: submodules-${{ hashFiles('.gitmodules') }}
 
       - name: Clone submodules
+        if: steps.cache-submodules.outputs.cache-hit != 'true'
         run: |
           git clone https://github.com/ionescu007/edk2.git uefi-boot/ext/edk2/src
           git clone --branch OpenSSL_1_1_0-stable https://github.com/openssl/openssl.git uefi-boot/ext/openssl
 
-      - name: Install NASM and set NASM_PREFIX
-        run: |
-          choco install nasm -y
-          $nasmPath = "C:\Program Files\NASM\"
-          echo "NASM_PREFIX=$nasmPath" >> $env:GITHUB_ENV
+      - name: Cache NASM
+        id: cache-nasm
+        uses: actions/cache@v4
+        with:
+          path: C:\Program Files\NASM
+          key: nasm-2.16
+
+      - name: Install NASM
+        if: steps.cache-nasm.outputs.cache-hit != 'true'
+        run: choco install nasm -y
+
+      - name: Set NASM_PREFIX
+        run: echo "NASM_PREFIX=C:\Program Files\NASM\" >> $env:GITHUB_ENV
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
+      - name: Cache vcpkg packages
+        id: cache-vcpkg
+        uses: actions/cache@v4
+        with:
+          path: C:\vcpkg\installed
+          key: vcpkg-${{ hashFiles('usermode/vcpkg.json') }}
+
       - name: Install vcpkg dependencies
+        if: steps.cache-vcpkg.outputs.cache-hit != 'true'
         run: |
           vcpkg install keystone:x64-windows zydis:x64-windows spdlog:x64-windows cli11:x64-windows
-          vcpkg integrate install
+
+      - name: vcpkg integrate
+        run: vcpkg integrate install
+
+      - name: Cache EDK2 build output
+        id: cache-edk2
+        uses: actions/cache@v4
+        with:
+          path: uefi-boot/ext/edk2/build/x64
+          key: edk2-${{ hashFiles('uefi-boot/ext/edk2/src/**') }}
 
       - name: Build EDK2 libraries
+        if: steps.cache-edk2.outputs.cache-hit != 'true'
         run: |
           msbuild uefi-boot/ext/edk2/build/EDK-II.sln `
             /p:Configuration=Release `
