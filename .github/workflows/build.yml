@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      arch:
+        description: 'Target CPU architecture'
+        required: true
+        default: 'Intel'
+        type: choice
+        options: [ Intel, AMD ]
 
 jobs:
   build:
@@ -14,7 +21,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false  # handled manually below due to branch pinning
+
+      - name: Clone submodules
+        run: |
+          git clone https://github.com/ionescu007/edk2.git uefi-boot/ext/edk2/src
+          git clone --branch OpenSSL_1_1_0-stable https://github.com/openssl/openssl.git uefi-boot/ext/openssl
+
+      - name: Install NASM and set NASM_PREFIX
+        run: |
+          choco install nasm -y
+          $nasmPath = "C:\Program Files\NASM\"
+          echo "NASM_PREFIX=$nasmPath" >> $env:GITHUB_ENV
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
@@ -23,6 +41,26 @@ jobs:
         run: |
           vcpkg install keystone:x64-windows zydis:x64-windows spdlog:x64-windows cli11:x64-windows
           vcpkg integrate install
+
+      - name: Build EDK2 libraries
+        run: |
+          msbuild uefi-boot/ext/edk2/build/EDK-II.sln `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /m `
+            /v:minimal
+
+      - name: Set architecture (Intel)
+        if: ${{ github.event.inputs.arch != 'AMD' }}
+        run: |
+          $file = "hyperv-attachment/src/arch_config.h"
+          (Get-Content $file) -replace '//\s*#define _INTELMACHINE', '#define _INTELMACHINE' | Set-Content $file
+
+      - name: Set architecture (AMD)
+        if: ${{ github.event.inputs.arch == 'AMD' }}
+        run: |
+          $file = "hyperv-attachment/src/arch_config.h"
+          (Get-Content $file) -replace '^#define _INTELMACHINE', '//#define _INTELMACHINE' | Set-Content $file
 
       - name: Build solution (Release|x64)
         run: |
@@ -35,7 +73,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: hyper-reV-build
+          name: hyper-reV-${{ github.event.inputs.arch || 'Intel' }}
           path: |
             build/x64/Release/*.sys
             build/x64/Release/*.efi
