@@ -76,6 +76,7 @@ jobs:
           name: hyper-reV-${{ github.event.inputs.arch || 'Intel' }}
           path: |
             build/x64/Release/*.sys
+            build/x64/Release/*.dll
             build/x64/Release/*.efi
             build/x64/Release/*.exe
           if-no-files-found: warn
