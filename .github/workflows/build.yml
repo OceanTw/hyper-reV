@@ -19,6 +19,11 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
+      - name: Install vcpkg dependencies
+        run: |
+          vcpkg install keystone:x64-windows zydis:x64-windows spdlog:x64-windows cli11:x64-windows
+          vcpkg integrate install
+
       - name: Build solution (Release|x64)
         run: |
           msbuild hyper-reV.sln `
