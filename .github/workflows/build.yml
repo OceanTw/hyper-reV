@@ -75,7 +75,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: uefi-boot/ext/edk2/build/x64
-          key: edk2-${{ hashFiles('uefi-boot/ext/edk2/src/**') }}
+          key: edk2-${{ hashFiles('.gitmodules') }}
 
       - name: Build EDK2 libraries
         if: steps.cache-edk2.outputs.cache-hit != 'true'
